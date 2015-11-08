@@ -1,0 +1,172 @@
+# Method 1 - Use the Full Data Set
+# Read the full data and select the correct columns
+data <- read.csv("~/Desktop/combined.csv", sep="|")[c("date", "country","as", "duration", "packets")]
+
+universi <- data[grep("Universi", data$as), ]
+research <- data[grep("Research", data$as), ]
+institute <- data[grep("Institute", data$as), ]
+school <- data[grep("School", data$as), ]
+education <- data[grep("Education", data$as), ]
+
+#make one data frame from the previous results 
+data2 <- rbind (universi, research)
+data2 <- rbind (data2, institute)
+data2 <- rbind (data2, school)
+data2 <- rbind (data2, education)
+
+#make one data frame with other than universities
+others <- rbind(research, institute)
+others <- rbind (others, school)
+others <- rbind (others, education)
+
+#take out the identical rows
+data3 <- unique(data2)
+others <- unique(others)
+universi <- unique(universi)
+
+
+### DURATION ### 
+
+#calculate overall duration of attacks per month
+data4 <- data3
+total_duration_per_month <- setNames(aggregate(data4$duration, list(strftime(data4$date, "%Y/%m")), sum), c("date", "total duration"))
+
+#plot overall duration of attacks per month
+plot(total_duration_per_month$`total duration`,type = "b", col = "blue", xaxt='n', xlab="Date", ylab="Duration (s)")
+axis(1, at=1:length(total_duration_per_month$date), lab=total_duration_per_month$date, cex.axis=0.5)
+
+#calculate overall duration per month for universities and others 
+uni_duration_per_month <- setNames(aggregate(universi$duration, list(strftime(universi$date, "%Y/%m")), sum), c("date", "total duration"))
+others_duration_per_month <- setNames(aggregate(others$duration, list(strftime(others$date, "%Y/%m")), sum), c("date", "total duration"))
+
+plot(uni_duration_per_month$`total duration`,type = "b",col="red", xaxt='n', yaxt='n', xlab="Date", ylab="Duration (s)")
+axis(1, at=1:length(uni_duration_per_month$date), lab=uni_duration_per_month$date, cex.axis=0.5)
+par(new=TRUE)
+plot(others_duration_per_month$`total duration`,type = "b",col="green", xaxt='n', yaxt='n', xlab="Date", ylab="Duration (s)")
+
+# calculate duration per month per AS
+duration_per_month_per_as <- setNames(aggregate(data4$duration, list(strftime(data4$date, "%Y/%m"), data4$as), sum), c("date", "as", "duration"))
+ascending <- duration_per_month_per_as[order(-duration_per_month_per_as$duration),]
+
+
+### INTENSITY ###
+
+# omit lines with duration 0, so we get rid of "Inf" values
+data4$duration[data4$duration==0] <- NA
+data4 <- na.omit(data4)
+
+#calculate intensity of attacks per month
+data4$intensity <- data4$packets/data4$duration
+total_intensity_per_month <- setNames(aggregate(data4$intensity, list(strftime(data4$date, "%Y/%m")), mean), c("date", "intensity"))
+
+plot(total_intensity_per_month$intensity,type = "b",col="blue", xaxt='n', xlab="Date", ylab="Mean intensity (packets/s)")
+axis(1, at=1:length(uni_duration_per_month$date), lab=uni_duration_per_month$date, cex.axis=0.5)
+
+#calculate overall intensity per month for universities
+unis <- data4[grep("Universi", data4$as), ]
+unis_intensity_per_month <- setNames(aggregate(unis$intensity, list(strftime(unis$date, "%Y/%m")), mean), c("date", "intensity"))
+
+#calculate overall intensity per month for others
+others$intensity <- others$packets/others$duration
+others$duration[others$duration==0] <- NA
+others <- na.omit(others)
+others_intensity_per_month <- setNames(aggregate(others$intensity, list(strftime(others$date, "%Y/%m")), mean), c("date", "intensity"))
+
+
+plot(total_intensity_per_month$intensity,type = "b",col="blue", xaxt='n', xlab="Date", ylab="Mean intensity (packets/s)")
+axis(1, at=1:length(uni_duration_per_month$date), lab=uni_duration_per_month$date, cex.axis=0.5)
+par(new=TRUE)
+plot(unis_intensity_per_month$intensity,type = "b", col="red", xaxt='n',yaxt='n', xlab="", ylab="")
+par(new=TRUE)
+plot(others_intensity_per_month$intensity, type = "b", col="green", xaxt='n',yaxt='n', xlab="", ylab="" )
+
+
+# calculate intensity per month per AS
+intensity_per_month_per_as <- setNames(aggregate(data4$intensity, list(strftime(data4$date, "%Y/%m"), data4$as), sum), c("date", "as", "intensity"))
+ascending <- intensity_per_month_per_as[order(-intensity_per_month_per_as$intensity),]
+
+#number of attacks per country
+number_attacks_per_country <- count(data4, "country")
+number_attacks_per_as <- count(data4, "as")
+
+
+#number of institutions per country
+
+ana<- data.frame(data4$country, data4$as)
+ana <- unique(ana)
+as_per_country <- count(ana, vars=c("data4.country"))
+
+
+### Internet users ### 
+
+
+# duration per month per country
+duration_per_month_per_country <- setNames(aggregate(data4$duration, list(strftime(data4$date, "%Y/%m"), data4$country), sum), c("date", "country", "totalduration"))
+
+#total duration per country (sum of all durations)
+total_duration_per_country <- setNames(aggregate(duration_per_month_per_country$totalduration, list(as.character(duration_per_month_per_country$country)), sum), c("country", "duration"))
+
+# order the countries from the highest total duration to shortest total duration
+total_duration_per_country <- total_duration_per_country[with(total_duration_per_country, order(total_duration_per_country$duration, decreasing = TRUE)),]
+
+total_duration_per_country <- data.frame(total_duration_per_country)
+
+#data from UN with numer of Internet users per 100 people (the higher the value, the more users)
+data_internet_users <- read.csv("~/Desktop/UNdata.csv")[c("Country.or.Area", "Value")]
+
+# change name of "Country.or.Area" to Country 
+colnames(data_internet_users) <- c("country", "value")
+colnames(as_per_country) <- c("country", "number_of_inst")
+
+# merge tables
+merged_data <- merge(total_duration_per_country, data_internet_users, by="country")
+merged_data2 <- merge(merged_data, number_as_per_country, by="country")
+merged_data3 <- merge(merged_data2, as_per_country, by = "country")
+
+#normalize duration (according to number of attacks) and order
+merged_data2$duration <- merged_data2$duration / merged_data2$freq
+
+# dur = cumulative duration of attacks / number of institutions => average duration normalized
+merged_data3$dur <- merged_data3$duration / merged_data3$number_of_inst
+
+# plot internet users and duration of attacks (using dur)
+merged_data3 <- merged_data3 [with(merged_data3, order(-dur)),]
+
+plot(merged_data3$dur, type="l", col="red", xlab = "", ylab = "", yaxt = 'n', xaxt='n', ann=FALSE)
+par(new=TRUE)
+plot(merged_data3$value, type="h", col="green", xlab="Countries", ylab="Internet users / 100 citizens")
+
+plot(merged_data3$value, merged_data3$dur, ylab="Duration of DDoS attacks (s)", xlab="Internet users / 100 citizens")
+abline(lm(merged_data3$dur~merged_data3$value), col = "blue")
+
+merged_data2 <- merged_data2 [with(merged_data3, order(-value)),]
+
+#plot normalized data duration and internet users
+plot(merged_data3$dur, type="l", col="red", xlab = "", ylab = "", yaxt = 'n', xaxt='n', ann=FALSE)
+par(new=TRUE)
+plot(merged_data3$value, type="h", col="green", xlab="Countries", ylab="Internet users / 100 citizens")
+
+
+plot(merged_data2$value, merged_data2$duration, ylab="Duration of DDoS attacks (s)", xlab="Internet users / 100 citizens")
+abline(lm(merged_data2$duration~merged_data2$value), col = "blue")
+
+
+#transform duration to hours
+merged_data$duration<- merged_data$duration/3600
+
+
+### GDP ### 
+
+#data from UN with GDP per country
+data_gdp <- read.csv("~/Desktop/UNdata_GDP.csv")[c("country", "gdp")]
+merged_gdp <- merge(merged_data3, data_gdp, by = "country")
+plot(merged_gdp$gdp, merged_gdp$duration, xlab="GDP", ylab="Average duration of DDoS attacks")
+abline(lm(merged_gdp$duration~merged_gdp$gdp), col = "blue")
+
+plot(merged_gdp$gdp, merged_gdp$freq, xlab="GDP", ylab="Cumulative number of DDoS attacks")
+abline(lm(merged_gdp$freq~merged_gdp$gdp), col = "blue")
+
+merged_gdp$attacks_per_inst <- merged_gdp$freq/merged_gdp$number_of_inst
+
+plot(merged_gdp$gdp, merged_gdp$attacks_per_inst, xlab="GDP", ylab="Number of DDoS attacks per institution")
+abline(lm(merged_gdp$attacks_per_inst~merged_gdp$gdp), col = "blue", method="s")
